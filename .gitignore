@@ -1,0 +1,68 @@
+# ============================================================
+# Gestura — .gitignore
+# ============================================================
+
+# ---------- OS / editor noise ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# ---------- Node / frontend ----------
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Python / backend ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ---------- Local data / secrets ----------
+# Local MongoDB data directory (created by `mongod --dbpath`)
+.mongo_data/
+
+# Environment files (each developer / deployment fills its own)
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Temp / scratch
+*.tmp
+*.bak
+backend/uploads_tmp/
+
+# ---------- Build artefacts ----------
+*.pyc
+*.wasm
+*.map
+.cache/

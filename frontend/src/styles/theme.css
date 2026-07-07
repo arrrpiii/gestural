@@ -1,0 +1,63 @@
+/* ==========================================================================
+   Theme — Neumorphism + Cyberpunk
+   Minimalistic, no gradient bloat. Solid colors, soft shadows, neon accents.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --bg: #0e0e14;
+  --bg-elev: #15151d;
+  --bg-deep: #08080c;
+
+  /* Neumorphic shadow pair (the "duo-tone" that gives the 3D feel) */
+  --shadow-dark: #06060a;
+  --shadow-light: #1f1f2c;
+
+  /* Cyberpunk neon accents */
+  --neon-cyan: #00e5ff;
+  --neon-magenta: #ff3df0;
+  --neon-violet: #8a5cff;
+
+  /* Text */
+  --text: #e6e6f0;
+  --text-dim: #8a8aa0;
+  --text-mute: #5a5a72;
+
+  /* Feedback */
+  --danger: #ff5577;
+  --success: #4dd99c;
+  --warn: #ffb84d;
+
+  /* Typography */
+  --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Sizing */
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+
+  /* Spacing */
+  --gap-1: 6px;
+  --gap-2: 12px;
+  --gap-3: 18px;
+  --gap-4: 24px;
+  --gap-5: 36px;
+  --gap-6: 56px;
+
+  /* Reusable shadows */
+  --shadow-out:
+    8px 8px 18px var(--shadow-dark),
+    -8px -8px 18px var(--shadow-light);
+  --shadow-out-sm:
+    4px 4px 10px var(--shadow-dark),
+    -4px -4px 10px var(--shadow-light);
+  --shadow-in:
+    inset 6px 6px 12px var(--shadow-dark),
+    inset -6px -6px 12px var(--shadow-light);
+  --shadow-in-sm:
+    inset 3px 3px 6px var(--shadow-dark),
+    inset -3px -3px 6px var(--shadow-light);
+  --shadow-glow-cyan: 0 0 18px rgba(0, 229, 255, 0.35);
+  --shadow-glow-magenta: 0 0 18px rgba(255, 61, 240, 0.35);
+}

@@ -1,0 +1,16 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+motor==3.6.0
+pymongo==4.9.2
+pyjwt==2.9.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.17
+python-dotenv==1.0.1
+pydantic==2.9.2
+email-validator==2.2.0
+agno==1.1.5
+google-genai==1.0.0
+imageio==2.34.2
+imageio-ffmpeg==0.5.1
+pillow==10.4.0
