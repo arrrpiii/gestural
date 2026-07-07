@@ -61,6 +61,9 @@ frontend/.env.local
 *.bak
 backend/uploads_tmp/
 
+# Original project spec — keep locally as reference, never commit
+prompt.txt
+
 # ---------- Build artefacts ----------
 *.pyc
 *.wasm
