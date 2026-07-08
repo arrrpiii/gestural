@@ -1,4 +1,4 @@
-"""Wrapper around the agno library (Gemini 2.5 Flash) for two jobs:
+"""Wrapper around the agno library (Gemini 3.5 Flash) for two jobs:
   1. Ideation: turn a user prompt into a JSON list of {text, gesture} pairs.
   2. Video review: analyze a recorded practice video and return coaching feedback.
 """
@@ -33,7 +33,7 @@ def _get_agent() -> Agent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise RuntimeError("GOOGLE_API_KEY is not set in environment")
         _agent = Agent(
-            model=Gemini(id="gemini-2.5-flash"),
+            model=Gemini(id="gemini-3.5-flash"),
             markdown=True,
         )
     return _agent
