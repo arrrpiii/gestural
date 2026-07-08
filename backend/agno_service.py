@@ -33,7 +33,7 @@ def _get_agent() -> Agent:
         if not os.getenv("GOOGLE_API_KEY"):
             raise RuntimeError("GOOGLE_API_KEY is not set in environment")
         _agent = Agent(
-            model=Gemini(id="gemini-3-flash"),
+            model=Gemini(id="gemini-2.5-flash"),
             markdown=True,
         )
     return _agent
