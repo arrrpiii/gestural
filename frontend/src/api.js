@@ -56,4 +56,13 @@ export const api = {
   deleteSession: (id) => request(`/api/sessions/${id}`, { method: 'DELETE' }),
   reReviewSession: (id) => request(`/api/sessions/${id}/re-review`, { method: 'POST' }),
   videoUrl: (id) => `/api/sessions/${id}/video`,
+
+  // albums
+  albums: {
+    list: () => request('/api/albums'),
+    create: (name) => request('/api/albums', { method: 'POST', body: { name } }),
+    rename: (id, name) =>
+      request(`/api/albums/${id}`, { method: 'PATCH', body: { name } }),
+    delete: (id) => request(`/api/albums/${id}`, { method: 'DELETE' }),
+  },
 }

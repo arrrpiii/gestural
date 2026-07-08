@@ -318,6 +318,45 @@
   overflow: hidden;
 }
 
+/* Album card (button-typed, opens a modal instead of navigating) ------- */
+.album-card {
+  appearance: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+}
+
+.album-card:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 2px;
+}
+
+/* Larger cards than .sessions-grid so the album cover gets more breathing
+   room. Two columns on small screens, expanding on wider viewports. */
+.albums-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--gap-4);
+}
+
+.album-count-line {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--neon-cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 2px;
+}
+
+/* Sessions grid shown inside the album-detail modal. */
+.album-sessions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap-3);
+}
+
 /* Floating plus -------------------------------------------------------- */
 .fab {
   position: fixed;

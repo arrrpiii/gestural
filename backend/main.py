@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from albums.routes import router as albums_router
 from auth.routes import router as auth_router
-from database import close_db
+from database import close_db, get_db
 from ideation.routes import router as ideation_router
 from practice.routes import router as practice_router
 
@@ -18,6 +19,10 @@ load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # One-time migration: drop any pre-album sessions that lack an album_id.
+    # Idempotent — once everything has album_id the filter matches nothing.
+    db = get_db()
+    await db.sessions.delete_many({"album_id": {"$exists": False}})
     yield
     await close_db()
 
@@ -42,3 +47,4 @@ async def health() -> dict[str, str]:
 app.include_router(auth_router)
 app.include_router(ideation_router)
 app.include_router(practice_router)
+app.include_router(albums_router)

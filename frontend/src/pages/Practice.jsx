@@ -27,10 +27,17 @@ export default function Practice() {
   const [selected, setSelected] = useState(null)
   const [cameraReady, setCameraReady] = useState(false)
   const [sessionName, setSessionName] = useState('')
+  const [albums, setAlbums] = useState([])
+  const [selectedAlbumId, setSelectedAlbumId] = useState('')
 
   // Load ideations for the dropdown.
   useEffect(() => {
     api.listIdeations().then(setIdeations).catch(() => setIdeations([]))
+  }, [])
+
+  // Load albums for the required album picker.
+  useEffect(() => {
+    api.albums.list().then(setAlbums).catch(() => setAlbums([]))
   }, [])
 
   // Acquire webcam stream on mount.
@@ -101,6 +108,10 @@ export default function Practice() {
 
   function startRecording() {
     if (!streamRef.current) return
+    if (!selectedAlbumId) {
+      setError('Pick an album before recording.')
+      return
+    }
     chunksRef.current = []
     // Prefer codecs that include Opus audio so Gemini can hear the take.
     const mimeCandidates = [
@@ -142,6 +153,7 @@ export default function Practice() {
     try {
       const form = new FormData()
       form.append('video', blob, 'recording.webm')
+      form.append('album_id', selectedAlbumId)
       if (selectedId) form.append('ideation_id', selectedId)
       if (sessionName.trim()) form.append('name', sessionName.trim())
       const session = await api.uploadSession(form)
@@ -157,7 +169,7 @@ export default function Practice() {
     <div className="practice-layout">
       <h1 className="page-title">Practice</h1>
 
-      {/* Top: name + ideation dropdown, full width */}
+      {/* Top: name + album + ideation dropdown, full width */}
       <div className="practice-top">
         <div className="field">
           <label className="field-label" htmlFor="session-name">
@@ -173,6 +185,32 @@ export default function Practice() {
             placeholder="e.g. Pitch take #3"
             disabled={recording || uploading}
           />
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="album-select">
+            Album *
+          </label>
+          <select
+            id="album-select"
+            className="select"
+            value={selectedAlbumId}
+            onChange={(e) => setSelectedAlbumId(e.target.value)}
+            disabled={recording}
+            required
+          >
+            <option value="">
+              {albums.length === 0
+                ? '— Create an album on the dashboard first —'
+                : '— Pick an album —'}
+            </option>
+            {albums.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+                {a.session_count ? `  (${a.session_count} take${a.session_count === 1 ? '' : 's'})` : ''}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="field">
@@ -252,7 +290,7 @@ export default function Practice() {
             <button
               className="btn btn-primary"
               onClick={startRecording}
-              disabled={!cameraReady || uploading}
+              disabled={!cameraReady || uploading || !selectedAlbumId}
             >
               {uploading ? 'Uploading…' : 'Start recording'}
             </button>

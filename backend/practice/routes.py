@@ -38,6 +38,7 @@ def _serialize_session(doc: dict[str, Any]) -> dict[str, Any]:
         "id": str(doc["_id"]),
         "name": doc.get("name") or "",
         "ideation_id": doc.get("ideation_id"),
+        "album_id": doc.get("album_id"),
         "review": doc.get("review", ""),
         "thumbnail": doc.get("thumbnail"),
         "created_at": doc["created_at"].isoformat() if doc.get("created_at") else None,
@@ -65,6 +66,7 @@ async def create_session(
     video: UploadFile = File(...),
     ideation_id: str | None = Form(default=None),
     name: str | None = Form(default=None),
+    album_id: str = Form(...),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     if not video.content_type or not video.content_type.startswith("video/"):
@@ -72,6 +74,15 @@ async def create_session(
 
     bucket = get_bucket()
     db = get_db()
+
+    # Every session must belong to an album the user owns.
+    if not ObjectId.is_valid(album_id):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid album id")
+    album = await db.albums.find_one(
+        {"_id": ObjectId(album_id), "user_id": user["id"]}
+    )
+    if album is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Album not found")
 
     ideation_context: str | None = None
     if ideation_id and ObjectId.is_valid(ideation_id):
@@ -116,6 +127,7 @@ async def create_session(
         "user_id": user["id"],
         "video_id": file_id,
         "ideation_id": ideation_id,
+        "album_id": album_id,
         "name": clean_name,
         "review": review,
         "thumbnail": thumbnail,
