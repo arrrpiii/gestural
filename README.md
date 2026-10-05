@@ -30,7 +30,7 @@ thumbnails) is plumbing around them.
 ## Project structure
 
 ```
-gesture/
+gestural/
 ├── backend/                        FastAPI service
 │   ├── main.py                     app entry, CORS, router mount
 │   ├── database.py                 motor + GridFS singletons
@@ -41,7 +41,6 @@ gesture/
 │   │   └── routes.py
 │   ├── ideation/                   ideation CRUD
 │   │   ├── routes.py
-│   │   └── service.py
 │   ├── practice/                   video upload, GridFS, session CRUD
 │   │   └── routes.py
 │   ├── requirements.txt
@@ -77,3 +76,79 @@ gesture/
             ├── base.css            reset, layout, buttons, inputs
             └── pages.css           page-specific layouts
 ```
+## Local setup
+
+Use Python 3.12, Node.js 24 LTS (minimum 22.12), and MongoDB 8.
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements-dev.txt
+cp backend/.env.example backend/.env
+```
+
+Set `JWT_SECRET` in `backend/.env` to a random secret of at least 32 bytes
+(generate one with `python3 -c 'import secrets; print(secrets.token_hex(32))'`).
+The server intentionally refuses to start with a missing or example secret.
+Set `GOOGLE_API_KEY` for Gemini; `GEMINI_MODEL` optionally overrides
+`gemini-2.5-flash`. Never commit credentials.
+
+Start MongoDB, then run the API from the repository root:
+
+```sh
+.venv/bin/uvicorn main:app --app-dir backend --reload
+```
+
+In another terminal:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open http://localhost:5173. Register, create an album on the dashboard,
+then open Practice. Camera capture requires localhost or HTTPS. Recordings
+are limited to 120 seconds and 50 MiB. ffmpeg is provided by imageio-ffmpeg;
+if unavailable on your platform, install ffmpeg or set `IMAGEIO_FFMPEG_EXE`.
+
+## Verification
+
+```sh
+.venv/bin/pytest -q backend/tests
+npm --prefix frontend test
+npm --prefix frontend run build
+```
+
+To include real MongoDB integration coverage, set `TEST_MONGO_URL` to a local
+test server when running pytest. The test creates a uniquely named database
+and removes only that database afterward. Gemini and thumbnail generation are
+stubbed in the API integration test; it does not make paid AI calls.
+
+```sh
+TEST_MONGO_URL=mongodb://localhost:27017 .venv/bin/pytest -q backend/tests
+.venv/bin/pip-audit -r backend/requirements.txt
+cd frontend && npm audit
+```
+
+GitHub Actions runs both suites, the production build, and dependency audits.
+
+## Deployment configuration
+
+The supplied Vercel rewrite forwards `/api` to `gestural.onrender.com`.
+Change that destination for a different backend, or set `VITE_API_BASE_URL`
+at frontend build time (for example `https://api.example.com`). Set
+`CORS_ORIGIN` on the API to your frontend origin when using separate origins.
+Serve production traffic over HTTPS and configure your reverse proxy with
+an upload-body limit near 51 MiB (50 MiB video plus multipart overhead),
+a request timeout sufficient for AI review, and rate limits for authentication
+and AI endpoints.
+
+Startup creates a unique email index. Existing duplicate email records need
+manual reconciliation before deploying this version; no account is silently
+deleted. Existing sessions are preserved, including legacy sessions without
+an album. Those legacy sessions remain available via the sessions API and
+should be assigned albums in a deliberate migration to show in the dashboard.
+If you previously used the default JWT secret, rotate it; existing logins
+will need to authenticate again.
+
+See [AUDIT.md](AUDIT.md) for the fixes and verification limits.

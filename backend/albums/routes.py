@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
+from gridfs.errors import NoFile
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
@@ -114,8 +115,7 @@ async def delete_album(
     user: dict = Depends(get_current_user),
 ) -> Response:
     """Cascade delete: drop every session in the album, sweep their GridFS
-    videos, then remove the album itself. Video deletion is best-effort — a
-    failure there does not block the session/album cleanup.
+    videos, then remove the album itself. Missing videos are tolerated; storage failures stop deletion so it can be retried.
     """
     if not ObjectId.is_valid(album_id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid id")
@@ -128,6 +128,11 @@ async def delete_album(
     if album is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Album not found")
 
+    # Prevent new recordings while the cascade is in progress (or awaiting retry).
+    await db.albums.update_one(
+        {"_id": ObjectId(album_id), "user_id": user["id"]},
+        {"$set": {"deleting": True}},
+    )
     sessions = db.sessions.find(
         {"album_id": album_id, "user_id": user["id"]}
     )
@@ -136,12 +141,10 @@ async def delete_album(
         if video_id:
             try:
                 await bucket.delete(ObjectId(str(video_id)))
-            except Exception:  # noqa: BLE001 — mirror practice/routes.py:292
+            except NoFile:
                 pass
 
-    await db.sessions.delete_many(
-        {"album_id": album_id, "user_id": user["id"]}
-    )
+        await db.sessions.delete_one({"_id": session["_id"], "user_id": user["id"]})
     await db.albums.delete_one(
         {"_id": ObjectId(album_id), "user_id": user["id"]}
     )

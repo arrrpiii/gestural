@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+import logging
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -40,13 +41,9 @@ async def create_ideation(
 ) -> dict[str, Any]:
     try:
         items = await generate_ideation(body.prompt)
-    except RuntimeError as exc:
-        # Missing / invalid Gemini API key, or model refused to run.
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 — surface upstream failures to the client
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, f"Ideation failed: {exc}"
-        ) from exc
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Ideation failed")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Ideation unavailable. Please try again later.") from exc
     if not items:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,

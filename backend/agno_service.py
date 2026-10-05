@@ -1,4 +1,4 @@
-"""Wrapper around the agno library (Gemini 3.5 Flash) for two jobs:
+"""Wrapper around the agno library (Gemini 2.5 Flash) for two jobs:
   1. Ideation: turn a user prompt into a JSON list of {text, gesture} pairs.
   2. Video review: analyze a recorded practice video and return coaching feedback.
 """
@@ -19,24 +19,11 @@ from fastapi.concurrency import run_in_threadpool
 
 load_dotenv()
 
-_agent: Agent | None = None
-
-
 def _get_agent() -> Agent:
-    """Lazily build a single Agent. Constructed once, reused across requests.
-
-    `agent.run()` is sync, so per-request calls are wrapped in `run_in_threadpool`
-    by the caller. We keep one instance because Agent construction is expensive.
-    """
-    global _agent
-    if _agent is None:
-        if not os.getenv("GOOGLE_API_KEY"):
-            raise RuntimeError("GOOGLE_API_KEY is not set in environment")
-        _agent = Agent(
-            model=Gemini(id="gemini-2.5-flash"),
-            markdown=True,
-        )
-    return _agent
+    """Keep mutable agent run state isolated between concurrent requests."""
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise RuntimeError("GOOGLE_API_KEY is not set in environment")
+    return Agent(model=Gemini(id=os.getenv("GEMINI_MODEL", "gemini-2.5-flash")), markdown=True)
 
 
 _IDEATION_SYSTEM = (
@@ -53,6 +40,8 @@ _IDEATION_SYSTEM = (
 
 def _extract_json(raw: str) -> list[dict[str, Any]]:
     """Pull a JSON array out of the model response, tolerating markdown fences."""
+    if not isinstance(raw, str):
+        return []
     text = raw.strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if fence:
@@ -72,8 +61,10 @@ def _extract_json(raw: str) -> list[dict[str, Any]]:
     for item in data:
         if not isinstance(item, dict):
             continue
-        text_v = str(item.get("text", "")).strip()
-        gesture_v = str(item.get("gesture", "")).strip()
+        if not isinstance(item.get("text"), str) or not isinstance(item.get("gesture"), str):
+            continue
+        text_v = item["text"].strip()
+        gesture_v = item["gesture"].strip()
         if text_v and gesture_v:
             cleaned.append({"text": text_v, "gesture": gesture_v})
     return cleaned

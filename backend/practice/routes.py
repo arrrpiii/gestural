@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+import logging
+from gridfs.errors import NoFile
 
 from bson import ObjectId
 from fastapi import (
@@ -26,6 +28,7 @@ from database import get_bucket, get_db
 from thumbnail_service import extract_thumbnail
 
 router = APIRouter(prefix="/api/sessions", tags=["practice"])
+logger = logging.getLogger(__name__)
 MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50MB ceiling for GridFS upload.
 
 
@@ -51,7 +54,7 @@ async def _attach_ideation(session: dict[str, Any], db) -> dict[str, Any]:
     serialized = _serialize_session(session)
     ideation_id = session.get("ideation_id")
     if ideation_id and ObjectId.is_valid(str(ideation_id)):
-        ide = await db.ideations.find_one({"_id": ObjectId(str(ideation_id))})
+        ide = await db.ideations.find_one({"_id": ObjectId(str(ideation_id)), "user_id": session["user_id"]})
         if ide:
             serialized["ideation"] = {
                 "id": str(ide["_id"]),
@@ -79,28 +82,34 @@ async def create_session(
     if not ObjectId.is_valid(album_id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid album id")
     album = await db.albums.find_one(
-        {"_id": ObjectId(album_id), "user_id": user["id"]}
+        {"_id": ObjectId(album_id), "user_id": user["id"], "deleting": {"$ne": True}}
     )
     if album is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Album not found")
 
     ideation_context: str | None = None
-    if ideation_id and ObjectId.is_valid(ideation_id):
+    if ideation_id:
+        if not ObjectId.is_valid(ideation_id):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid ideation id")
         ide = await db.ideations.find_one(
             {"_id": ObjectId(ideation_id), "user_id": user["id"]}
         )
+        if ide is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ideation not found")
         if ide:
             lines = [
                 f"- {item['text']} (gesture: {item['gesture']})"
                 for item in ide.get("items", [])
-                if isinstance(item, dict)
+                if isinstance(item, dict) and "text" in item and "gesture" in item
             ]
             if lines:
                 ideation_context = f"Topic: {ide.get('prompt','')}\n" + "\n".join(lines)
 
-    video_bytes = await video.read()
+    video_bytes = await video.read(MAX_VIDEO_BYTES + 1)
+    if not video_bytes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Video is empty")
     if len(video_bytes) > MAX_VIDEO_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Video too large")
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Video too large")
 
     # Upload to GridFS first; if review or thumbnail fails we still have the file.
     file_id = await bucket.upload_from_stream(
@@ -115,8 +124,9 @@ async def create_session(
     review = ""
     try:
         review = await review_video(video_bytes, video.content_type, ideation_context)
-    except Exception as exc:  # noqa: BLE001
-        review = f"_Review failed: {exc}_"
+    except Exception:  # noqa: BLE001
+        logger.exception("Video review failed")
+        review = "Review unavailable. Please try Re-review later."
 
     # Thumbnail extraction is best-effort — failure leaves thumbnail=None.
     thumbnail = await extract_thumbnail(video_bytes, video.content_type)
@@ -133,8 +143,24 @@ async def create_session(
         "thumbnail": thumbnail,
         "created_at": datetime.now(timezone.utc),
     }
-    result = await db.sessions.insert_one(doc)
+    try:
+        result = await db.sessions.insert_one(doc)
+    except Exception:
+        await bucket.delete(file_id)
+        raise
     doc["_id"] = result.inserted_id
+    # An album may have been deleted while the AI was reviewing the upload.
+    # Check after insertion so either this request or the cascade owns cleanup.
+    album = await db.albums.find_one(
+        {"_id": ObjectId(album_id), "user_id": user["id"], "deleting": {"$ne": True}}
+    )
+    if album is None:
+        try:
+            await bucket.delete(file_id)
+        except NoFile:
+            pass
+        await db.sessions.delete_one({"_id": result.inserted_id, "user_id": user["id"]})
+        raise HTTPException(status.HTTP_409_CONFLICT, "Album was deleted during upload")
     return await _attach_ideation(doc, db)
 
 
@@ -170,7 +196,7 @@ async def re_review_session(
     except Exception as exc:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            f"Could not read video from storage: {exc}",
+            "Could not read video from storage",
         ) from exc
 
     content_type = (grid_out.metadata or {}).get("content_type", "video/webm")
@@ -178,12 +204,12 @@ async def re_review_session(
     ideation_context: str | None = None
     ideation_id = doc.get("ideation_id")
     if ideation_id and ObjectId.is_valid(str(ideation_id)):
-        ide = await db.ideations.find_one({"_id": ObjectId(str(ideation_id))})
+        ide = await db.ideations.find_one({"_id": ObjectId(str(ideation_id)), "user_id": user["id"]})
         if ide:
             lines = [
                 f"- {item['text']} (gesture: {item['gesture']})"
                 for item in ide.get("items", [])
-                if isinstance(item, dict)
+                if isinstance(item, dict) and "text" in item and "gesture" in item
             ]
             if lines:
                 ideation_context = f"Topic: {ide.get('prompt','')}\n" + "\n".join(lines)
@@ -191,7 +217,8 @@ async def re_review_session(
     try:
         review = await review_video(video_bytes, content_type, ideation_context)
     except Exception as exc:  # noqa: BLE001
-        review = f"_Review failed: {exc}_"
+        logger.exception("Video re-review failed")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Review unavailable. Please try again later.") from exc
 
     await db.sessions.update_one(
         {"_id": ObjectId(session_id)},
@@ -243,7 +270,10 @@ async def stream_video(
     if not file_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No video for this session")
 
-    grid_out = await bucket.open_download_stream(ObjectId(str(file_id)))
+    try:
+        grid_out = await bucket.open_download_stream(ObjectId(str(file_id)))
+    except NoFile:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Video not found") from None
     content_type = (grid_out.metadata or {}).get("content_type", "video/webm")
 
     async def iterator():
@@ -280,6 +310,8 @@ async def update_session(
     doc = await db.sessions.find_one(
         {"_id": ObjectId(session_id), "user_id": user["id"]}
     )
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
     return await _attach_ideation(doc, db)
 
 
@@ -301,7 +333,7 @@ async def delete_session(
     if video_id:
         try:
             await bucket.delete(ObjectId(str(video_id)))
-        except Exception:  # noqa: BLE001
+        except NoFile:
             pass
     await db.sessions.delete_one({"_id": ObjectId(session_id)})
     return Response(status_code=status.HTTP_204_NO_CONTENT)

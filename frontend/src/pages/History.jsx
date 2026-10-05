@@ -135,7 +135,7 @@ function ReviewCard({ kind, title, accent, items }) {
  * the video to that moment.
  */
 function Timeline({ duration, markers, currentTime, onSeek }) {
-  if (!duration || duration <= 0 || markers.length === 0) return null
+  if (!Number.isFinite(duration) || duration <= 0 || markers.length === 0) return null
   return (
     <div className="timeline">
       <div className="timeline-header">
@@ -196,6 +196,7 @@ export default function History() {
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const videoRef = useRef(null)
+  const probingDuration = useRef(false)
 
   // Editable name state.
   const [name, setName] = useState('')
@@ -207,23 +208,35 @@ export default function History() {
   const [reReviewing, setReReviewing] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+    setSession(null)
+    setError(null)
+    setNameDirty(false)
     api.getSession(id)
       .then((s) => {
+        if (cancelled) return
         setSession(s)
         setName(s.name || '')
         lastSavedName.current = s.name || ''
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => { if (!cancelled) setError(e.message) })
+    return () => { cancelled = true }
   }, [id])
 
   useEffect(() => {
     let cancelled = false
     let createdUrl = null
+    const controller = new AbortController()
+    probingDuration.current = false
+    setVideoUrl(null)
+    setDuration(0)
+    setCurrentTime(0)
     setVideoLoading(true)
     async function load() {
       try {
         const token = getToken()
         const res = await fetch(api.videoUrl(id), {
+          signal: controller.signal,
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
         if (!res.ok) throw new Error(`Video fetch failed (${res.status})`)
@@ -240,6 +253,7 @@ export default function History() {
     load()
     return () => {
       cancelled = true
+      controller.abort()
       if (createdUrl) URL.revokeObjectURL(createdUrl)
     }
   }, [id])
@@ -306,6 +320,7 @@ export default function History() {
 
   return (
     <div className="history-layout stack">
+      {error && <p className="error" role="alert">{error}</p>}
       <div className="history-head">
         <Link to="/dashboard" className="back-link">← Back to dashboard</Link>
         <h1 className="page-title" style={{ margin: 0 }}>{displayName}</h1>
@@ -326,8 +341,27 @@ export default function History() {
             ref={videoRef}
             src={videoUrl}
             controls
-            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
-            onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime || 0)}
+            onLoadedMetadata={(e) => {
+              const video = e.currentTarget
+              if (Number.isFinite(video.duration)) setDuration(video.duration)
+              else {
+                probingDuration.current = true
+                video.currentTime = 1e10
+              }
+            }}
+            onDurationChange={(e) => {
+              const video = e.currentTarget
+              if (Number.isFinite(video.duration)) {
+                setDuration(video.duration)
+              }
+            }}
+            onSeeked={(e) => {
+              if (probingDuration.current) {
+                probingDuration.current = false
+                e.currentTarget.currentTime = 0
+              }
+            }}
+            onTimeUpdate={(e) => { if (!probingDuration.current) setCurrentTime(e.currentTarget.currentTime || 0) }}
           />
         )}
       </motion.div>
@@ -349,6 +383,11 @@ export default function History() {
         </div>
       )}
 
+      {!parsed.strengths.length && !parsed.drills.length && !parsed.timeline.length && (
+        <p className="neu" style={{ padding: 'var(--gap-4)', whiteSpace: 'pre-wrap' }}>
+          {session.review || 'No review available. Use Re-review to try again.'}
+        </p>
+      )}
       {/* Strengths + Specific Drills as cards */}
       <div className="review-grid">
         <ReviewCard
@@ -403,6 +442,7 @@ export default function History() {
               type="text"
               maxLength={80}
               value={name}
+              disabled={nameSaving}
               onChange={(e) => {
                 setName(e.target.value)
                 setNameDirty(e.target.value !== lastSavedName.current)

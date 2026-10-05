@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from albums.routes import router as albums_router
 from auth.routes import router as auth_router
 from database import close_db, get_db
+from auth.service import get_jwt_secret
 from ideation.routes import router as ideation_router
 from practice.routes import router as practice_router
 
@@ -19,12 +20,16 @@ load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # One-time migration: drop any pre-album sessions that lack an album_id.
-    # Idempotent — once everything has album_id the filter matches nothing.
+    get_jwt_secret()
     db = get_db()
-    await db.sessions.delete_many({"album_id": {"$exists": False}})
-    yield
-    await close_db()
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.sessions.create_index([("user_id", 1), ("album_id", 1), ("created_at", -1)])
+        await db.albums.create_index([("user_id", 1), ("created_at", -1)])
+        await db.ideations.create_index([("user_id", 1), ("created_at", -1)])
+        yield
+    finally:
+        await close_db()
 
 
 app = FastAPI(title="Gestural Practice API", version="0.1.0", lifespan=lifespan)

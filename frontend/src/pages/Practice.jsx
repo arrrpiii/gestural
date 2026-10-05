@@ -17,6 +17,7 @@ export default function Practice() {
   const streamRef = useRef(null)
   const recorderRef = useRef(null)
   const chunksRef = useRef([])
+  const mountedRef = useRef(false)
 
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -32,19 +33,24 @@ export default function Practice() {
 
   // Load ideations for the dropdown.
   useEffect(() => {
-    api.listIdeations().then(setIdeations).catch(() => setIdeations([]))
+    api.listIdeations().then(setIdeations).catch((e) => setError(e.message))
   }, [])
 
   // Load albums for the required album picker.
   useEffect(() => {
-    api.albums.list().then(setAlbums).catch(() => setAlbums([]))
+    api.albums.list().then(setAlbums).catch((e) => setError(e.message))
   }, [])
 
   // Acquire webcam stream on mount.
   useEffect(() => {
     let cancelled = false
+    mountedRef.current = true
     async function start() {
       try {
+        if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+          setError('Recording requires a supported browser and HTTPS (or localhost).')
+          return
+        }
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: 1280, height: 720 },
           audio: {
@@ -64,12 +70,21 @@ export default function Practice() {
         }
         setCameraReady(true)
       } catch (e) {
+        if (cancelled) return
         setError('Camera or microphone permission denied. Please allow access and reload.')
       }
     }
     start()
     return () => {
       cancelled = true
+      mountedRef.current = false
+      const recorder = recorderRef.current
+      if (recorder) {
+        recorder.onstop = null
+        recorder.ondataavailable = null
+        recorder.onerror = null
+        if (recorder.state !== 'inactive') recorder.stop()
+      }
       stopStream()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,16 +93,10 @@ export default function Practice() {
   // Recording timer.
   useEffect(() => {
     if (!recording) return
-    const id = setInterval(() => {
-      setElapsed((s) => {
-        if (s + 1 >= MAX_SECONDS) {
-          stopRecording()
-          return MAX_SECONDS
-        }
-        return s + 1
-      })
-    }, 1000)
-    return () => clearInterval(id)
+    const startedAt = Date.now()
+    const id = setInterval(() => setElapsed(Math.min(MAX_SECONDS, Math.floor((Date.now() - startedAt) / 1000))), 250)
+    const timeout = setTimeout(stopRecording, MAX_SECONDS * 1000)
+    return () => { clearInterval(id); clearTimeout(timeout) }
   }, [recording])
 
   // Load selected ideation's items.
@@ -96,7 +105,12 @@ export default function Practice() {
       setSelected(null)
       return
     }
-    api.getIdeation(selectedId).then(setSelected).catch(() => setSelected(null))
+    let cancelled = false
+    setSelected(null)
+    api.getIdeation(selectedId)
+      .then((item) => { if (!cancelled) setSelected(item) })
+      .catch(() => { if (!cancelled) setSelected(null) })
+    return () => { cancelled = true }
   }, [selectedId])
 
   function stopStream() {
@@ -107,31 +121,43 @@ export default function Practice() {
   }
 
   function startRecording() {
-    if (!streamRef.current) return
+    if (!streamRef.current || recording || uploading) return
     if (!selectedAlbumId) {
       setError('Pick an album before recording.')
       return
     }
+    setError(null)
     chunksRef.current = []
-    // Prefer codecs that include Opus audio so Gemini can hear the take.
-    const mimeCandidates = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-      'video/mp4',
-    ]
-    const mime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || ''
-    const recorder = mime
-      ? new MediaRecorder(streamRef.current, { mimeType: mime })
-      : new MediaRecorder(streamRef.current)
-    recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+    try {
+      // Prefer codecs that include Opus audio so Gemini can hear the take.
+      const mimeCandidates = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+      ]
+      const mime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || ''
+      const recorder = mime
+        ? new MediaRecorder(streamRef.current, { mimeType: mime })
+        : new MediaRecorder(streamRef.current)
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+      }
+      recorder.onerror = () => {
+        recorder.onstop = null
+        setRecording(false)
+        setError('Recording failed. Please try again.')
+      }
+      recorder.onstop = () => {
+        if (mountedRef.current) uploadRecording(recorder.mimeType)
+      }
+      recorder.start()
+      recorderRef.current = recorder
+      setElapsed(0)
+      setRecording(true)
+    } catch {
+      setError('Could not start recording. Please try another browser.')
     }
-    recorder.onstop = () => uploadRecording()
-    recorder.start()
-    recorderRef.current = recorder
-    setElapsed(0)
-    setRecording(true)
   }
 
   function stopRecording() {
@@ -141,23 +167,28 @@ export default function Practice() {
     setRecording(false)
   }
 
-  async function uploadRecording() {
-    const blob = new Blob(chunksRef.current, { type: 'video/webm' })
+  async function uploadRecording(mimeType) {
+    setRecording(false)
+    const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
     chunksRef.current = []
     if (blob.size === 0) {
       setError('No video captured.')
+      return
+    }
+    if (blob.size > 50 * 1024 * 1024) {
+      setError('Recording exceeds 50 MB. Please record a shorter take.')
       return
     }
     setUploading(true)
     setError(null)
     try {
       const form = new FormData()
-      form.append('video', blob, 'recording.webm')
+      form.append('video', blob, blob.type.includes('mp4') ? 'recording.mp4' : 'recording.webm')
       form.append('album_id', selectedAlbumId)
       if (selectedId) form.append('ideation_id', selectedId)
       if (sessionName.trim()) form.append('name', sessionName.trim())
       const session = await api.uploadSession(form)
-      navigate(`/history/${session.id}`)
+      if (mountedRef.current) navigate(`/history/${session.id}`)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -196,7 +227,7 @@ export default function Practice() {
             className="select"
             value={selectedAlbumId}
             onChange={(e) => setSelectedAlbumId(e.target.value)}
-            disabled={recording}
+            disabled={recording || uploading}
             required
           >
             <option value="">
@@ -222,7 +253,7 @@ export default function Practice() {
             className="select"
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            disabled={recording}
+            disabled={recording || uploading}
           >
             <option value="">— None —</option>
             {ideations.map((i) => (

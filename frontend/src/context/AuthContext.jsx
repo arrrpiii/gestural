@@ -19,8 +19,8 @@ export function AuthProvider({ children }) {
       try {
         const me = await api.me()
         if (!cancelled) setUser(me)
-      } catch {
-        setToken(null)
+      } catch (e) {
+        if (!cancelled && e.status === 401) setToken(null)
       } finally {
         if (!cancelled) setLoading(false)
       }

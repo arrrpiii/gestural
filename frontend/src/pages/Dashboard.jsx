@@ -29,7 +29,7 @@ export default function Dashboard() {
   const [modalError, setModalError] = useState(null)
 
   useEffect(() => {
-    api.albums.list().then(setAlbums).catch(() => setAlbums([]))
+    api.albums.list().then(setAlbums).catch((e) => setCreateError(e.message))
   }, [])
 
   // Load the open album's sessions whenever it changes.
@@ -41,15 +41,18 @@ export default function Dashboard() {
       setModalError(null)
       return
     }
+    let cancelled = false
+    setRenaming(false)
     setAlbumSessions(null)
     setAlbumSessionsError(null)
     setModalError(null)
     api
       .listSessions()
       .then((all) => {
-        setAlbumSessions(all.filter((s) => s.album_id === openAlbumId))
+        if (!cancelled) setAlbumSessions(all.filter((s) => s.album_id === openAlbumId))
       })
-      .catch((e) => setAlbumSessionsError(e.message))
+      .catch((e) => { if (!cancelled) setAlbumSessionsError(e.message) })
+    return () => { cancelled = true }
   }, [openAlbumId])
 
   // Close the album modal on Escape.
@@ -193,10 +196,12 @@ export default function Dashboard() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}
+              maxLength={2000}
+              aria-label="Topic for your script"
               disabled={loading}
             />
             <div className="row" style={{ flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" onClick={generate} disabled={!prompt.trim() || loading}>
+              <button className="btn btn-primary" onClick={generate} disabled={prompt.trim().length < 3 || loading}>
                 {loading ? 'Generating…' : 'Generate ideas'}
               </button>
               {error && <p className="error" style={{ marginLeft: 8 }}>{error}</p>}
@@ -236,6 +241,7 @@ export default function Dashboard() {
             className="input"
             type="text"
             maxLength={MAX_ALBUM_NAME}
+            aria-label="New album name"
             placeholder="e.g. Q3 investor pitch"
             value={newAlbumName}
             onChange={(e) => setNewAlbumName(e.target.value)}
