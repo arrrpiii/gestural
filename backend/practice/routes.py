@@ -1,4 +1,4 @@
-"""Practice session routes: record video (upload to GridFS), review via agno,
+"""Practice session routes: record video (upload to GridFS), review via LangGraph,
 list, fetch, stream, edit, and delete.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from agno_service import review_video
+from ai_service import review_video
 from auth.service import get_current_user
 from database import get_bucket, get_db
 from thumbnail_service import extract_thumbnail
@@ -169,11 +169,11 @@ async def re_review_session(
     session_id: str,
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Re-run the agno review on an existing session's video.
+    """Re-run the LangGraph review on an existing session's video.
 
     Useful for upgrading reviews from the old text-only format to the new
     timestamped format, or for getting fresh feedback after the prompt changes.
-    The stored video bytes are loaded from GridFS and re-uploaded through agno;
+    The stored video bytes are loaded from GridFS and re-uploaded through LangGraph;
     nothing else about the session is touched.
     """
     if not ObjectId.is_valid(session_id):

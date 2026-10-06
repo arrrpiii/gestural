@@ -24,7 +24,7 @@ thumbnails) is plumbing around them.
 - **Frontend** — React 18 + Vite + plain CSS + Framer Motion
 - **Backend** — FastAPI + Motor (async MongoDB) + GridFS for video storage
 - **Database** — MongoDB (WiredTiger storage engine)
-- **AI** — [`agno`](https://github.com/agno-agi/agno) library with Gemini 2.5
+- **AI** — [LangGraph](https://docs.langchain.com/oss/python/langgraph/graph-api) workflows with Gemini 2.5
   Flash for both ideation (text) and video review (multimodal — picture + audio)
 
 ## Project structure
@@ -34,7 +34,7 @@ gestural/
 ├── backend/                        FastAPI service
 │   ├── main.py                     app entry, CORS, router mount
 │   ├── database.py                 motor + GridFS singletons
-│   ├── agno_service.py             agno wrapper (ideation + video review)
+│   ├── ai_service.py               LangGraph workflows (ideation + video review)
 │   ├── thumbnail_service.py        ffmpeg-based thumbnail extraction
 │   ├── auth/                       bcrypt + JWT, register / login / me
 │   │   ├── service.py
@@ -152,3 +152,24 @@ If you previously used the default JWT secret, rotate it; existing logins
 will need to authenticate again.
 
 See [AUDIT.md](AUDIT.md) for the fixes and verification limits.
+
+
+## AI workflows
+
+`backend/ai_service.py` uses two compiled LangGraph graphs:
+
+- Ideation: generate JSON with Gemini → validate script/gesture pairs → retry
+  once if no usable items were returned → finish.
+- Video review: prepare the coaching prompt → upload the original video with
+  Google's Files API, wait for processing, generate feedback, and delete the
+  temporary Google upload in a `finally` block.
+
+Gemini calls use the official `google-genai` SDK inside graph nodes. LangGraph
+controls workflow execution; Gemini remains the model provider. No LangGraph
+server, LangSmith account, extra API key, or database migration is required.
+`GOOGLE_API_KEY` and `GEMINI_MODEL` retain their existing meanings. Graphs have
+request-local state and no checkpointer; videos remain stored in MongoDB GridFS.
+Blocking SDK work runs in worker threads. HTTP calls and file-processing waits
+are bounded. Live model output requires testing with a configured Gemini key.
+
+Video upload/processing follows the [Gemini video documentation](https://ai.google.dev/gemini-api/docs/video-understanding).

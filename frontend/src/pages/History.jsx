@@ -50,7 +50,7 @@ function tsToSeconds(s) {
 }
 
 /**
- * Split the agno markdown review into discrete sections so we can render each
+ * Split the AI markdown review into discrete sections so we can render each
  * in its own card. Sections: Strengths, Specific Drills, Timestamped Notes.
  * (Older sessions without Timestamped Notes still parse cleanly.)
  */

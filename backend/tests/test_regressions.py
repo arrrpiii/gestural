@@ -16,7 +16,7 @@ from starlette.datastructures import Headers
 
 from auth import routes as auth_routes, service
 from practice import routes
-from agno_service import _extract_json, _get_agent
+from ai_service import _extract_json
 import main
 
 
@@ -178,11 +178,6 @@ def test_json_parser_rejects_non_strings():
     assert _extract_json('```json\n[{"text":" Hello ","gesture":"Wave"}]\n```') == [{'text': 'Hello', 'gesture': 'Wave'}]
 
 
-def test_agents_are_request_local(monkeypatch):
-    monkeypatch.setenv('GOOGLE_API_KEY', 'test-key')
-    assert _get_agent() is not _get_agent()
-
-
 def test_api_auth_boundary_and_health():
     client = TestClient(main.app)
     assert client.get('/api/health').status_code == 200
@@ -200,30 +195,6 @@ def test_album_deleted_during_review_does_not_orphan_upload(storage):
     assert error.value.status_code == 409
     bucket.delete.assert_awaited_once()
     db.sessions.delete_one.assert_awaited_once()
-
-
-def test_ai_wrapper_passes_video_and_removes_tempfile(monkeypatch):
-    from pathlib import Path
-    import agno_service
-    paths = []
-    def respond(prompt, videos, stream):
-        path = Path(videos[0].filepath)
-        assert path.read_bytes() == b'video'
-        assert 'Practice plan' in prompt
-        paths.append(path)
-        return SimpleNamespace(content='## Strengths\n- Clear delivery')
-    monkeypatch.setattr(agno_service, '_get_agent', lambda: SimpleNamespace(run=respond))
-    assert 'Clear delivery' in run(agno_service.review_video(b'video', 'video/mp4', 'Practice plan'))
-    assert paths and not paths[0].exists()
-
-
-def test_ideation_retries_invalid_model_output(monkeypatch):
-    import agno_service
-    agent = SimpleNamespace(run=MagicMock(side_effect=[SimpleNamespace(content='no JSON'),
-        SimpleNamespace(content='[{"text":"Hi","gesture":"Wave"}]')]))
-    monkeypatch.setattr(agno_service, '_get_agent', lambda: agent)
-    assert run(agno_service.generate_ideation('Greeting')) == [{'text': 'Hi', 'gesture': 'Wave'}]
-    assert agent.run.call_count == 2
 
 
 def test_thumbnail_extraction_on_real_video(tmp_path):

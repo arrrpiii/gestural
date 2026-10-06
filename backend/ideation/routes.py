@@ -9,7 +9,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from agno_service import generate_ideation
+from ai_service import generate_ideation
 from auth.service import get_current_user
 from database import get_db
 
