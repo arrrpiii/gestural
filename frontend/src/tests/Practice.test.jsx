@@ -65,4 +65,43 @@ it('automatically stops at the recording limit', async () => {
   await act(async () => { vi.advanceTimersByTime(120000) })
   expect(recorder.state).toBe('inactive')
   expect(api.uploadSession).toHaveBeenCalledTimes(1)
+  expect(stopTrack).toHaveBeenCalled()
+})
+
+it('releases the camera immediately while the upload is still pending', async () => {
+  api.uploadSession.mockReturnValue(new Promise(() => {}))
+  const view = await start()
+  fireEvent.click(screen.getByText('Stop recording'))
+  expect(stopTrack).toHaveBeenCalled()
+  expect(view.container.querySelector('video').srcObject).toBeNull()
+  expect(screen.getByText('Uploading…').disabled).toBe(true)
+  expect(screen.getByText('Camera off')).toBeTruthy()
+})
+
+it('keeps the camera off after a failed upload and allows explicitly enabling it again', async () => {
+  api.uploadSession.mockRejectedValue(new Error('Upload failed'))
+  await start()
+  fireEvent.click(screen.getByText('Stop recording'))
+  await screen.findByText('Upload failed')
+  expect(stopTrack).toHaveBeenCalled()
+  expect(screen.getByText('Start recording').disabled).toBe(true)
+  fireEvent.click(screen.getByText('Enable camera'))
+  await waitFor(() => expect(screen.getByText('Start recording').disabled).toBe(false))
+  expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(2)
+})
+
+it('releases devices before the asynchronous recorder flush and still uploads the final chunk', async () => {
+  api.uploadSession.mockClear()
+  await start()
+  recorder.stop = () => { recorder.state = 'inactive' }
+  fireEvent.click(screen.getByText('Stop recording'))
+  expect(stopTrack).toHaveBeenCalled()
+  expect(api.uploadSession).not.toHaveBeenCalled()
+  expect(screen.getByText('Uploading…').disabled).toBe(true)
+  await act(async () => {
+    recorder.ondataavailable({ data: new Blob(['final chunk'], { type: 'video/mp4' }) })
+    recorder.onstop()
+  })
+  expect(api.uploadSession).toHaveBeenCalledTimes(1)
+  expect(api.uploadSession.mock.calls[0][0].get('video').size).toBe(11)
 })

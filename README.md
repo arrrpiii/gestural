@@ -162,7 +162,10 @@ See [AUDIT.md](AUDIT.md) for the fixes and verification limits.
   once if no usable items were returned → finish.
 - Video review: prepare the coaching prompt → upload the original video with
   Google's Files API, wait for processing, generate feedback, and delete the
-  temporary Google upload in a `finally` block.
+  temporary Google upload in a `finally` block. Reviews use a validated JSON
+  schema with required timestamped notes, then render to the existing markdown
+  format. Incomplete output or transient generation errors receive one automatic
+  retry using the same upload.
 
 Gemini calls use the official `google-genai` SDK inside graph nodes. LangGraph
 controls workflow execution; Gemini remains the model provider. No LangGraph

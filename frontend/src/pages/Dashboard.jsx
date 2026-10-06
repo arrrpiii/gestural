@@ -13,6 +13,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [albums, setAlbums] = useState([])
+  const [albumsLoading, setAlbumsLoading] = useState(true)
+  const [albumsError, setAlbumsError] = useState(null)
   const [newAlbumName, setNewAlbumName] = useState('')
   const [creatingAlbum, setCreatingAlbum] = useState(false)
   const [createError, setCreateError] = useState(null)
@@ -29,7 +31,12 @@ export default function Dashboard() {
   const [modalError, setModalError] = useState(null)
 
   useEffect(() => {
-    api.albums.list().then(setAlbums).catch((e) => setCreateError(e.message))
+    let cancelled = false
+    api.albums.list()
+      .then((items) => { if (!cancelled) setAlbums(items) })
+      .catch((e) => { if (!cancelled) setAlbumsError(e.message) })
+      .finally(() => { if (!cancelled) setAlbumsLoading(false) })
+    return () => { cancelled = true }
   }, [])
 
   // Load the open album's sessions whenever it changes.
@@ -248,13 +255,13 @@ export default function Dashboard() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleCreateAlbum()
             }}
-            disabled={creatingAlbum}
+            disabled={creatingAlbum || albumsLoading}
             style={{ flex: '1 1 240px', minWidth: '240px' }}
           />
           <button
             className="btn btn-primary"
             onClick={handleCreateAlbum}
-            disabled={!newAlbumName.trim() || creatingAlbum}
+            disabled={!newAlbumName.trim() || creatingAlbum || albumsLoading}
           >
             {creatingAlbum ? 'Creating…' : 'Create album'}
           </button>
@@ -269,7 +276,11 @@ export default function Dashboard() {
         transition={{ duration: 0.3, delay: 0.1 }}
       >
         <h2 className="section-title">Your albums</h2>
-        {albums.length === 0 ? (
+        {albumsLoading ? (
+          <p className="muted" role="status">Loading</p>
+        ) : albumsError ? (
+          <p className="error" role="alert">{albumsError}</p>
+        ) : albums.length === 0 ? (
           <div className="empty">
             No albums yet. Create one above, then hit the <span style={{ color: 'var(--neon-cyan)' }}>+</span> button to start recording.
           </div>

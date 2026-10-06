@@ -18,6 +18,7 @@ export default function Practice() {
   const recorderRef = useRef(null)
   const chunksRef = useRef([])
   const mountedRef = useRef(false)
+  const cameraRequestRef = useRef(0)
 
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -27,6 +28,7 @@ export default function Practice() {
   const [selectedId, setSelectedId] = useState('')
   const [selected, setSelected] = useState(null)
   const [cameraReady, setCameraReady] = useState(false)
+  const [cameraLoading, setCameraLoading] = useState(true)
   const [sessionName, setSessionName] = useState('')
   const [albums, setAlbums] = useState([])
   const [selectedAlbumId, setSelectedAlbumId] = useState('')
@@ -41,43 +43,43 @@ export default function Practice() {
     api.albums.list().then(setAlbums).catch((e) => setError(e.message))
   }, [])
 
-  // Acquire webcam stream on mount.
-  useEffect(() => {
-    let cancelled = false
-    mountedRef.current = true
-    async function start() {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-          setError('Recording requires a supported browser and HTTPS (or localhost).')
-          return
-        }
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        })
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop())
-          return
-        }
-        streamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play().catch(() => {})
-        }
-        setCameraReady(true)
-      } catch (e) {
-        if (cancelled) return
-        setError('Camera or microphone permission denied. Please allow access and reload.')
+  async function enableCamera() {
+    const request = ++cameraRequestRef.current
+    setCameraLoading(true)
+    setError(null)
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        throw new Error('Recording requires a supported browser and HTTPS (or localhost).')
       }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720 },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      if (!mountedRef.current || request !== cameraRequestRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play().catch(() => {})
+      }
+      if (mountedRef.current && request === cameraRequestRef.current) setCameraReady(true)
+    } catch (e) {
+      if (mountedRef.current && request === cameraRequestRef.current) {
+        setError(e.message || 'Could not access the camera or microphone.')
+      }
+    } finally {
+      if (mountedRef.current && request === cameraRequestRef.current) setCameraLoading(false)
     }
-    start()
+  }
+
+  useEffect(() => {
+    mountedRef.current = true
+    enableCamera()
     return () => {
-      cancelled = true
       mountedRef.current = false
+      ++cameraRequestRef.current
       const recorder = recorderRef.current
       if (recorder) {
         recorder.onstop = null
@@ -87,7 +89,6 @@ export default function Practice() {
       }
       stopStream()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Recording timer.
@@ -118,6 +119,8 @@ export default function Practice() {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
+    if (videoRef.current) videoRef.current.srcObject = null
+    if (mountedRef.current) setCameraReady(false)
   }
 
   function startRecording() {
@@ -145,10 +148,13 @@ export default function Practice() {
       }
       recorder.onerror = () => {
         recorder.onstop = null
+        stopStream()
+        setUploading(false)
         setRecording(false)
         setError('Recording failed. Please try again.')
       }
       recorder.onstop = () => {
+        stopStream()
         if (mountedRef.current) uploadRecording(recorder.mimeType)
       }
       recorder.start()
@@ -162,8 +168,10 @@ export default function Practice() {
 
   function stopRecording() {
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      setUploading(true)
       recorderRef.current.stop()
     }
+    stopStream()
     setRecording(false)
   }
 
@@ -172,10 +180,12 @@ export default function Practice() {
     const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
     chunksRef.current = []
     if (blob.size === 0) {
+      setUploading(false)
       setError('No video captured.')
       return
     }
     if (blob.size > 50 * 1024 * 1024) {
+      setUploading(false)
       setError('Recording exceeds 50 MB. Please record a shorter take.')
       return
     }
@@ -272,7 +282,7 @@ export default function Practice() {
             <video ref={videoRef} muted playsInline />
             {!cameraReady && (
               <div className="placeholder">
-                {error || 'Requesting camera…'}
+                {cameraLoading ? 'Requesting camera…' : 'Camera off'}
               </div>
             )}
             {recording && (
@@ -317,6 +327,9 @@ export default function Practice() {
       <div className="practice-bottom">
         {error && <p className="error">{error}</p>}
         <div className="practice-actions">
+          {!cameraReady && !cameraLoading && !uploading && (
+            <button className="btn" onClick={enableCamera}>Enable camera</button>
+          )}
           {!recording ? (
             <button
               className="btn btn-primary"

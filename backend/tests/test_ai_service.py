@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -57,7 +58,10 @@ def client(monkeypatch):
     client.__enter__.return_value = client
     client.files.upload.return_value = file()
     client.files.get.return_value = file()
-    client.models.generate_content.return_value = SimpleNamespace(text='## Strengths\n- Clear delivery')
+    client.models.generate_content.return_value = SimpleNamespace(text=json.dumps({
+        'strengths': ['Clear delivery'], 'drills': ['Practice eye contact'],
+        'notes': [{'start': 5, 'end': 8, 'text': 'Keep eye contact'}],
+    }))
     monkeypatch.setattr(ai, '_get_client', lambda: client)
     monkeypatch.setattr(ai.time, 'sleep', lambda _: None)
     return client
@@ -121,3 +125,37 @@ def test_sdk_configuration_and_json_output(client, monkeypatch):
     args = client.models.generate_content.call_args.kwargs
     assert args['model'] == 'test-model'
     assert args['config'].response_mime_type == 'application/json'
+
+
+def test_missing_notes_are_retried_without_reuploading(client):
+    valid = client.models.generate_content.return_value
+    client.models.generate_content.side_effect = [
+        SimpleNamespace(text='{"strengths":["Good"],"drills":["Practice"],"notes":[]}'), valid,
+    ]
+    result = run(ai.review_video(b'video', 'video/webm', None))
+    assert '## Timestamped Notes\n0:05-0:08: Keep eye contact' in result
+    assert client.models.generate_content.call_count == 2
+    client.files.upload.assert_called_once()
+    client.files.delete.assert_called_once()
+
+
+def test_incomplete_review_is_not_saved_as_success(client):
+    client.models.generate_content.return_value.text = '{"strengths":["Good"],"drills":["Practice"],"notes":[]}'
+    with pytest.raises(RuntimeError, match='incomplete review'):
+        run(ai.review_video(b'video', 'video/webm', None))
+    assert client.models.generate_content.call_count == 2
+    client.files.delete.assert_called_once()
+
+
+def test_transient_generation_failure_is_retried(client):
+    from google.genai.errors import APIError
+    valid = client.models.generate_content.return_value
+    client.models.generate_content.side_effect = [APIError(503, {'error': {'message': 'Busy'}}), valid]
+    assert 'Timestamped Notes' in run(ai.review_video(b'video', 'video/webm', None))
+    assert client.models.generate_content.call_count == 2
+
+
+def test_invalid_timestamp_range_is_rejected():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        ai.TimestampedNote(start=8, end=5, text='Look up')

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { api, getToken } from '../api.js'
 import IdeationItem from '../components/IdeationItem.jsx'
+import { parseReview } from '../review.js'
 
 /**
  * Convert a small subset of inline markdown (**bold**, *italic*, `code`) into
@@ -34,70 +35,6 @@ function renderInline(text) {
   }
   if (last < cleaned.length) out.push(cleaned.slice(last))
   return out
-}
-
-/**
- * Parse a timestamp string like "0:05" or "1:23" into seconds.
- */
-function tsToSeconds(s) {
-  s = s.trim()
-  if (/^\d+:\d+$/.test(s)) {
-    const [m, sec] = s.split(':').map(Number)
-    return m * 60 + sec
-  }
-  const n = parseInt(s, 10)
-  return Number.isFinite(n) ? n : null
-}
-
-/**
- * Split the AI markdown review into discrete sections so we can render each
- * in its own card. Sections: Strengths, Specific Drills, Timestamped Notes.
- * (Older sessions without Timestamped Notes still parse cleanly.)
- */
-function parseReview(md) {
-  const sections = { strengths: [], drills: [], timeline: [] }
-  if (!md) return sections
-  const lines = md.split('\n')
-  let current = null
-
-  for (const raw of lines) {
-    const heading = raw.match(/^#+\s*(.+)/)
-    if (heading) {
-      const t = heading[1].toLowerCase()
-      if (t.includes('strength')) current = 'strengths'
-      else if (t.includes('drill')) current = 'drills'
-      else if (t.includes('timestamp') || t.includes('timeline') || t.includes('note'))
-        current = 'timeline'
-      else current = null
-      continue
-    }
-
-    if (current === 'timeline') {
-      // Range: "0:23-0:35: hands went into pockets"
-      let m = raw.match(/^\s*(\d+:\d+|\d+)\s*[-–]\s*(\d+:\d+|\d+)\s*[:\-]\s*(.+)/)
-      if (m) {
-        const start = tsToSeconds(m[1])
-        const end = tsToSeconds(m[2])
-        const text = m[3].trim()
-        if (start !== null && end !== null && text) {
-          sections.timeline.push({ start, end: Math.max(end, start), text })
-          continue
-        }
-      }
-      // Point in time: "0:05: eye contact dropped"
-      m = raw.match(/^\s*(\d+:\d+|\d+)\s*[:\-]\s*(.+)/)
-      if (m) {
-        const t = tsToSeconds(m[1])
-        const text = m[2].trim()
-        if (t !== null && text) sections.timeline.push({ start: t, end: t, text })
-      }
-      continue
-    }
-
-    const bullet = raw.match(/^[-*]\s+(.+)/)
-    if (bullet && current) sections[current].push(bullet[1].trim())
-  }
-  return sections
 }
 
 function formatTs(secs) {
@@ -373,12 +310,10 @@ export default function History() {
         onSeek={seekTo}
       />
 
-      {parsed.timeline.length === 0 && (
+      {parsed.timeline.length === 0 && (parsed.strengths.length > 0 || parsed.drills.length > 0) && (
         <div className="timeline-empty">
           <p className="muted" style={{ fontSize: '0.9rem' }}>
-            No timestamped notes in this review. The original feedback is in the cards below.
-            Hit <strong style={{ color: 'var(--neon-cyan)' }}>Re-review</strong> below to ask the coach
-            for a timestamped breakdown of this take.
+            This saved review has no timestamped notes. Use <strong>Re-review</strong> to generate a new breakdown.
           </p>
         </div>
       )}

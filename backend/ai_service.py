@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from fastapi.concurrency import run_in_threadpool
 from google import genai
 from google.genai import types
+from google.genai.errors import APIError
+from pydantic import BaseModel, Field, ValidationError, ConfigDict, model_validator
 from langgraph.graph import END, START, StateGraph
 
 load_dotenv()
@@ -77,24 +79,58 @@ def _extract_json(raw: str) -> list[dict[str, Any]]:
 
 _VIDEO_REVIEW_PROMPT = (
     "You are an expert presentation coach for video content creators. "
-    "The recording has BOTH picture and audio — watch the visual delivery AND listen to the vocal delivery.\n"
-    "Review the take and give concrete, actionable feedback.\n\n"
-    "Output your review in EXACTLY three sections in this order, with no other sections, no preamble, no postscript:\n\n"
-    "## Strengths\n"
-    "- 3 to 5 bullets highlighting what the user did well (general observations, no timestamps)\n\n"
-    "## Specific Drills\n"
-    "- 3 to 5 bullets describing concrete drills to practice (general, no timestamps)\n\n"
-    "## Timestamped Notes\n"
-    "For each specific moment that needs improvement, output a single line in this EXACT format:\n"
-    "MM:SS: short recommendation\n"
-    "For a span of time:\n"
-    "MM:SS-MM:SS: short recommendation\n\n"
-    "Examples:\n"
-    "0:05: Eye contact dropped, looked down for 2 seconds\n"
-    "0:23-0:35: Hands went into pockets, lost visual energy\n"
-    "1:02: Voice pace slowed noticeably\n\n"
-    "Give 4 to 8 timestamped notes covering the most important moments. Be specific and concise — one short sentence per note."
+    "Watch the visual delivery AND listen to the audio. Return JSON matching the provided schema. "
+    "Include strengths (3-5 concrete observations), drills (3-5 actionable practice drills), "
+    "and notes (timestamped recommendations). Give 4-8 notes when the footage supports them, "
+    "or fewer for a short take, with at least one grounded observation. "
+    "Each note has integer start and end times in seconds from the beginning of the video "
+    "and a concise text recommendation. For a point use equal start and end values. "
+    "Only reference moments actually present in the recording; never invent events or timestamps."
 )
+
+
+class TimestampedNote(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    text: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        if self.end < self.start:
+            raise ValueError("Note end must not precede its start")
+        return self
+
+
+class VideoReview(BaseModel):
+    strengths: list[str] = Field(min_length=1)
+    drills: list[str] = Field(min_length=1)
+    notes: list[TimestampedNote] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_bullets(self):
+        if any(not item.strip() for item in self.strengths + self.drills):
+            raise ValueError("Review bullets must not be blank")
+        return self
+
+
+def _review_markdown(review: VideoReview) -> str:
+    # Preserve the public API while making the stored format deterministic.
+    def line(text: str) -> str:
+        return " ".join(text.split())
+
+    def timestamp(seconds: int) -> str:
+        return f"{seconds // 60}:{seconds % 60:02d}"
+
+    lines = ["## Strengths", *[f"- {line(x)}" for x in review.strengths],
+             "", "## Specific Drills", *[f"- {line(x)}" for x in review.drills],
+             "", "## Timestamped Notes"]
+    for note in sorted(review.notes, key=lambda note: note.start):
+        when = timestamp(note.start)
+        if note.end > note.start:
+            when += f"-{timestamp(note.end)}"
+        lines.append(f"{when}: {line(note.text)}")
+    return "\n".join(lines)
 
 
 class IdeationState(TypedDict):
@@ -178,14 +214,24 @@ def _review_uploaded_video(video_bytes: bytes, mime: str, prompt: str) -> str:
                 uploaded = client.files.get(name=uploaded.name)
             if not uploaded.state or uploaded.state.name != "ACTIVE":
                 raise RuntimeError("Video processing failed")
-            response = client.models.generate_content(
-                model=_model(),
-                contents=[types.Part.from_uri(file_uri=uploaded.uri, mime_type=uploaded.mime_type), prompt],
-            )
-            review = (response.text or "").strip()
-            if not review:
-                raise RuntimeError("The model returned an empty review")
-            return review
+            for attempt in range(2):
+                try:
+                    response = client.models.generate_content(
+                        model=_model(),
+                        contents=[types.Part.from_uri(file_uri=uploaded.uri, mime_type=uploaded.mime_type), prompt],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json", response_schema=VideoReview,
+                        ),
+                    )
+                    return _review_markdown(VideoReview.model_validate_json(response.text or ""))
+                except ValidationError as exc:
+                    if attempt:
+                        raise RuntimeError("The model returned an incomplete review") from exc
+                    prompt += "\nReturn all required fields, including at least one valid timestamped note."
+                except APIError as exc:
+                    if attempt or (exc.code != 429 and exc.code < 500):
+                        raise
+                    time.sleep(1)
         finally:
             try:
                 client.files.delete(name=uploaded.name)
