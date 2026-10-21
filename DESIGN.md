@@ -25,3 +25,8 @@ Use a single short page entrance; no looping decorative animation.
 Loading, empty, error, disabled, and pending states are explicit. Camera access
 starts on user action. Preserve recording shutdown, ownership checks, saved
 reviews, script generation, and album/session management.
+
+Signed-out Home showcases the core workflow. Albums and Scripts show clearly
+labelled, selectable illustrative examples with account creation and login links.
+Public previews never fetch private workspace data; recording and real detail
+pages still require authentication.

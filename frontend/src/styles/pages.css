@@ -211,3 +211,24 @@
   .nav-links { gap: 10px; }
   .brand { font-size: 16px; }
 }
+
+/* Public, illustrative workspaces */
+.preview-label { font-size: 12px; border: 1px solid var(--border); border-radius: 4px; padding: 5px 9px; white-space: nowrap; }
+.preview-note { font-size: 13px; }
+.preview-album { text-align: left; width: 100%; }
+.preview-album.selected { border-color: #333; background: #f7f7f7; }
+.preview-album .album-open { font-size: 12px; }
+.preview-comparison { border: 1px solid var(--border); border-radius: 7px; padding: 24px; }
+.preview-comparison h3 { font-size: 14px; margin-bottom: 8px; }
+.preview-caption { margin-top: 20px; font-size: 13px; }
+.preview-invite { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid var(--border); padding-top: 28px; }
+.preview-invite h2 { font-size: 18px; margin-bottom: 6px; }
+.preview-invite p { font-size: 14px; }
+.preview-invite .row { flex-shrink: 0; }
+.script-list button { padding: 12px; text-align: left; font-size: 14px; overflow-wrap: anywhere; }
+.script-list button:hover { background: #f6f6f6; }
+.script-list button.selected { background: #eee; }
+@media (max-width: 600px) {
+  .preview-invite { align-items: flex-start; flex-direction: column; }
+  .preview-comparison { padding: 18px; }
+}

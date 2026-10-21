@@ -12,6 +12,7 @@ import Practice from './pages/Practice.jsx'
 import History from './pages/History.jsx'
 import IdeationList from './pages/IdeationList.jsx'
 import Account from './pages/Account.jsx'
+import WorkspacePreview from './pages/WorkspacePreview.jsx'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -19,6 +20,11 @@ function ProtectedRoute({ children }) {
   if (loading) return <p role="status">Loading</p>
   if (!user) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />
   return children
+}
+function WorkspaceRoute({ kind, children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <p role="status">Loading</p>
+  return user ? children : <WorkspacePreview key={kind} kind={kind} />
 }
 function PublicRoute({ children }) {
   const { user, loading } = useAuth()
@@ -48,9 +54,9 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-            <Route path="/albums" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/albums" element={<WorkspaceRoute kind="albums"><Dashboard /></WorkspaceRoute>} />
             <Route path="/albums/:id" element={<ProtectedRoute><Album /></ProtectedRoute>} />
-            <Route path="/scripts" element={<ProtectedRoute><IdeationList /></ProtectedRoute>} />
+            <Route path="/scripts" element={<WorkspaceRoute kind="scripts"><IdeationList /></WorkspaceRoute>} />
             <Route path="/record" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
             <Route path="/history/:id" element={<ProtectedRoute><History /></ProtectedRoute>} />
             <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />

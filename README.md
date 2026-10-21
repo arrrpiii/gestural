@@ -31,6 +31,10 @@ thumbnails) is plumbing around them.
   and record. Album/script links preselect the relevant context.
 - **Account** (`/account`): account details and logout.
 
+Signed-out visitors can explore illustrative Albums and Scripts workspaces without
+logging in. Home explains script generation, recording, timestamped coaching,
+and progress comparisons. Sample content is separate from private user data.
+
 The UI uses a white/black palette, small page transitions, and responsive layouts.
 Reduced-motion preferences are respected. Existing `/dashboard`, `/ideation`,
 and `/practice` links redirect to the new pages. See [DESIGN.md](DESIGN.md).
