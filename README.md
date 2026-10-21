@@ -14,6 +14,8 @@ The product is built around a single loop:
 3. **Get a coach-style review** — strengths, specific drills, and a
    **timestamped timeline** with red markers at every moment that needs work.
    Hover a marker to read the note, click to jump the video.
+4. **Review progress across takes** — open an album and select **Review progress**
+   to compare delivery, see supporting feedback, and get next-practice drills.
 
 The script↔gesture pair and the timestamped review are the two pieces of
 feedback that make the loop useful — everything else (auth, history,
@@ -43,6 +45,7 @@ gestural/
 │   │   ├── routes.py
 │   ├── practice/                   video upload, GridFS, session CRUD
 │   │   └── routes.py
+│   ├── performance/                cached album comparisons + evidence validation
 │   ├── requirements.txt
 │   └── .env.example
 └── frontend/                       Vite + React
@@ -111,6 +114,26 @@ then open Practice. Camera capture requires localhost or HTTPS. Recordings
 are limited to 120 seconds and 50 MiB. ffmpeg is provided by imageio-ffmpeg;
 if unavailable on your platform, install ffmpeg or set `IMAGEIO_FFMPEG_EXE`.
 
+## Performance reviewer
+
+Open an album on the dashboard and select **Review progress**. At least two
+recordings with usable coaching feedback are required. The reviewer considers
+the latest six recordings in the album, excludes failed or missing reviews,
+and compares the earliest included take with the latest included take. Intermediate
+reviews provide context about consistency.
+
+Each report covers clarity, pacing, vocal delivery, gestures, posture, and eye
+contact with baseline/latest observations, a trend, supporting quotes linked to
+recordings, and a drill for the next take. Missing evidence is marked explicitly.
+These are comparisons of saved AI coaching feedback, not fresh video analysis
+or measured skill scores.
+
+Reports are stored on the album and reused without another model call. Adding,
+deleting, renaming, or re-reviewing a recording in the comparison window makes
+the cached report outdated. Reopen the album and select **Update performance
+review** to regenerate it. The GET/POST endpoints are
+`/api/albums/{album_id}/performance`; both enforce album ownership.
+
 ## Verification
 
 ```sh
@@ -166,6 +189,12 @@ See [AUDIT.md](AUDIT.md) for the fixes and verification limits.
   schema with required timestamped notes, then render to the existing markdown
   format. Incomplete output or transient generation errors receive one automatic
   retry using the same upload.
+
+`backend/performance/service.py` adds a third graph: compare saved reviews →
+validate the six-dimension schema and evidence citations → retry once if invalid.
+Quotes must occur in the referenced review, and comparative trends must cite
+both endpoint recordings. These checks validate source references; the meaning
+and quality of the assessment still depend on the model and the original reviews.
 
 Gemini calls use the official `google-genai` SDK inside graph nodes. LangGraph
 controls workflow execution; Gemini remains the model provider. No LangGraph

@@ -14,6 +14,7 @@ from database import close_db, get_db
 from auth.service import get_jwt_secret
 from ideation.routes import router as ideation_router
 from practice.routes import router as practice_router
+from performance.routes import router as performance_router
 
 load_dotenv()
 
@@ -53,3 +54,5 @@ app.include_router(auth_router)
 app.include_router(ideation_router)
 app.include_router(practice_router)
 app.include_router(albums_router)
+
+app.include_router(performance_router)

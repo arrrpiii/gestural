@@ -1425,3 +1425,33 @@
   padding-top: var(--gap-2);
   border-top: 1px solid rgba(0, 229, 255, 0.08);
 }
+
+
+/* Performance comparisons */
+.performance-review { padding-bottom: var(--gap-4); margin-bottom: var(--gap-4); border-bottom: 1px solid rgba(0,229,255,.15); }
+.performance-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.performance-heading h3, .performance-heading h4 { margin: 0; }
+.performance-description { font-size: .82rem; line-height: 1.6; margin: 12px 0; }
+.performance-empty { padding: 16px; background: rgba(0,229,255,.035); border-radius: 10px; font-size: .9rem; }
+.performance-summary { margin: 18px 0; line-height: 1.65; }
+.performance-stats { display: flex; flex-wrap: wrap; gap: 10px; }
+.performance-stats span { padding: 10px 12px; border: 1px solid rgba(0,229,255,.15); border-radius: 8px; font-size: .8rem; }
+.performance-stats strong { color: var(--neon-cyan); }
+.performance-recordings { padding-left: 22px; margin: 14px 0 22px; }
+.performance-recordings li { margin: 8px 0; font-size: .85rem; }
+.performance-recordings li span { display: block; font-size: .75rem; }
+.performance-dimensions { display: grid; gap: 14px; }
+.performance-dimension { padding: 18px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
+.performance-trend { font-size: .7rem; padding: 5px 9px; border: 1px solid currentColor; border-radius: 999px; }
+.trend-improved { color: var(--success); }
+.trend-regressed, .trend-mixed { color: #f4bd7d; }
+.trend-unchanged { color: var(--neon-cyan); }
+.trend-insufficient_evidence { color: var(--text-dim); }
+.performance-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; font-size: .86rem; line-height: 1.6; }
+.performance-label { display: block; color: var(--text-dim); font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.performance-explanation { margin-top: 14px; font-size: .86rem; line-height: 1.6; }
+.performance-next { margin-top: 14px; padding: 12px; background: rgba(0,229,255,.04); border-radius: 8px; font-size: .86rem; line-height: 1.6; }
+.performance-evidence { margin-top: 14px; font-size: .8rem; }
+.performance-evidence summary { cursor: pointer; color: var(--neon-cyan); }
+.performance-evidence blockquote { margin: 12px 0; padding-left: 12px; border-left: 2px solid var(--text-dim); line-height: 1.6; }
+@media (max-width: 560px) { .performance-comparison { grid-template-columns: 1fr; } }

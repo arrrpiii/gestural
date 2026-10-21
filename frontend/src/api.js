@@ -66,6 +66,8 @@ export const api = {
   // albums
   albums: {
     list: () => request('/api/albums'),
+    performance: (id) => request(`/api/albums/${id}/performance`),
+    reviewPerformance: (id) => request(`/api/albums/${id}/performance`, { method: 'POST' }),
     create: (name) => request('/api/albums', { method: 'POST', body: { name } }),
     rename: (id, name) =>
       request(`/api/albums/${id}`, { method: 'PATCH', body: { name } }),

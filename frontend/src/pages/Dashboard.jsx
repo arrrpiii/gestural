@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import IdeationItem from '../components/IdeationItem.jsx'
 import SessionCard from '../components/SessionCard.jsx'
 import AlbumCard from '../components/AlbumCard.jsx'
+import PerformanceReview from '../components/PerformanceReview.jsx'
 
 const MAX_ALBUM_NAME = 80
 
@@ -356,6 +357,7 @@ export default function Dashboard() {
               </div>
 
               <div className="modal-body">
+                <PerformanceReview key={openAlbumId} albumId={openAlbumId} />
                 {modalError && <p className="error">{modalError}</p>}
                 {albumSessionsError && <p className="error">{albumSessionsError}</p>}
                 {!albumSessionsError && albumSessions === null && (
