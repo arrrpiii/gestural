@@ -26,6 +26,11 @@ jobs:
         image: mongo:8
         ports:
           - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,7 +42,7 @@ jobs:
       - run: pip install -r backend/requirements-dev.txt
       - run: pytest -q backend/tests --junitxml=pytest-results.xml
         env:
-          TEST_MONGO_URL: mongodb://localhost:27017
+          TEST_MONGO_URL: mongodb://127.0.0.1:27017
       - name: Report backend test failures
         if: failure()
         run: |
