@@ -43,7 +43,7 @@ function formatTs(secs) {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-function ReviewCard({ kind, title, accent, items }) {
+function ReviewCard({ kind, title, items }) {
   if (!items || items.length === 0) return null
   return (
     <motion.section
@@ -53,7 +53,6 @@ function ReviewCard({ kind, title, accent, items }) {
       transition={{ duration: 0.3, delay: 0.05 * kind }}
     >
       <header className="review-section-head">
-        <span className="dot" style={{ background: accent }} />
         <h3>{title}</h3>
         <span className="count">{items.length}</span>
       </header>
@@ -115,7 +114,7 @@ function Timeline({ duration, markers, currentTime, onSeek }) {
       </div>
       <div className="timeline-foot">
         <span>0:00</span>
-        <span className="muted">Click any red marker to jump to that moment</span>
+        <span className="muted">Select a marker to jump to that moment</span>
         <span>{formatTs(duration)}</span>
       </div>
     </div>
@@ -200,7 +199,7 @@ export default function History() {
     setDeleting(true)
     try {
       await api.deleteSession(id)
-      navigate('/dashboard')
+      navigate(session.album_id ? `/albums/${session.album_id}` : '/albums')
     } catch (e) {
       setError(e.message)
       setDeleting(false)
@@ -259,7 +258,7 @@ export default function History() {
     <div className="history-layout stack">
       {error && <p className="error" role="alert">{error}</p>}
       <div className="history-head">
-        <Link to="/dashboard" className="back-link">← Back to dashboard</Link>
+        <Link to={session.album_id ? `/albums/${session.album_id}` : "/albums"} className="back-link">← Back to album</Link>
         <h1 className="page-title" style={{ margin: 0 }}>{displayName}</h1>
         <p className="muted" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', marginTop: 4 }}>
           {new Date(session.created_at).toLocaleString()}
@@ -328,13 +327,11 @@ export default function History() {
         <ReviewCard
           kind={0}
           title="Strengths"
-          accent="var(--success)"
           items={parsed.strengths}
         />
         <ReviewCard
           kind={1}
           title="Specific Drills"
-          accent="var(--neon-cyan)"
           items={parsed.drills}
         />
       </div>
@@ -347,7 +344,7 @@ export default function History() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.15 }}
         >
-          <h2 className="section-title">Reference ideation</h2>
+          <h2 className="section-title">Reference script</h2>
           <p className="muted" style={{ marginBottom: 'var(--gap-3)', fontSize: '0.9rem' }}>
             {session.ideation.prompt}
           </p>
@@ -391,7 +388,7 @@ export default function History() {
             <span className="rename-status">
               {nameSaving && <span className="muted">saving…</span>}
               {!nameSaving && nameDirty && (
-                <span style={{ color: 'var(--neon-cyan)' }}>
+                <span style={{ color: 'var(--accent)' }}>
                   unsaved — press Enter or click away to save
                 </span>
               )}

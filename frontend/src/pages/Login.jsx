@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Login() {
   const { login, error } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -17,7 +18,7 @@ export default function Login() {
     setSubmitting(true)
     try {
       await login(email, password)
-      navigate('/dashboard')
+      navigate(location.state?.from?.startsWith('/') && !location.state.from.startsWith('//') ? location.state.from : '/albums', { replace: true })
     } catch (err) {
       setLocalError(err.message)
     } finally {
@@ -33,7 +34,7 @@ export default function Login() {
       transition={{ duration: 0.3 }}
     >
       <h2>Welcome back</h2>
-      <p className="sub">Log in to your practice studio.</p>
+      <p className="sub">Continue to your recordings and scripts.</p>
       <form className="auth-form" onSubmit={handleSubmit}>
         <div className="field">
           <label className="field-label" htmlFor="email">Email</label>
@@ -68,7 +69,7 @@ export default function Login() {
         </button>
       </form>
       <p className="auth-alt">
-        New here? <Link to="/register">Create an account</Link>
+        New here? <Link to="/register" state={location.state}>Create an account</Link>
       </p>
     </motion.div>
   )

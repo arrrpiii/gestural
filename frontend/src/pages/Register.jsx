@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Register() {
   const { register, error } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -18,7 +19,7 @@ export default function Register() {
     setSubmitting(true)
     try {
       await register(email, password, name)
-      navigate('/dashboard')
+      navigate(location.state?.from?.startsWith('/') && !location.state.from.startsWith('//') ? location.state.from : '/albums', { replace: true })
     } catch (err) {
       setLocalError(err.message)
     } finally {
@@ -33,8 +34,8 @@ export default function Register() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <h2>Create your studio</h2>
-      <p className="sub">Start practicing in under a minute.</p>
+      <h2>Create an account</h2>
+      <p className="sub">Save your scripts, recordings, and feedback.</p>
       <form className="auth-form" onSubmit={handleSubmit}>
         <div className="field">
           <label className="field-label" htmlFor="name">Name</label>
@@ -83,7 +84,7 @@ export default function Register() {
         </button>
       </form>
       <p className="auth-alt">
-        Already have an account? <Link to="/login">Log in</Link>
+        Already have an account? <Link to="/login" state={location.state}>Log in</Link>
       </p>
     </motion.div>
   )

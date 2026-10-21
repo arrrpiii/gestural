@@ -55,7 +55,6 @@ export default function PerformanceReview({ albumId }) {
     <section className="performance-review" aria-label="Performance review">
       <div className="performance-heading">
         <div>
-          <span className="modal-eyebrow">Across your recordings</span>
           <h3>Performance review</h3>
         </div>
         {!loading && !report && data && (
@@ -65,8 +64,7 @@ export default function PerformanceReview({ albumId }) {
         )}
       </div>
       <p className="muted performance-description">
-        Compare your delivery across the latest six takes in this album, using saved coaching feedback.
-        These are AI assessments, not measured scores or a fresh analysis of the videos.
+        Compare up to six recent takes using saved coaching feedback.
       </p>
       {loading && <p role="status">Loading performance review…</p>}
       {error && <p className="error" role="alert">{error}</p>}

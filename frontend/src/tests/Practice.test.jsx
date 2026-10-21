@@ -33,6 +33,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
 async function start() {
   const view = render(<MemoryRouter><Practice /></MemoryRouter>)
   await screen.findByText('My album')
+  fireEvent.click(screen.getByText('Enable camera'))
   fireEvent.change(screen.getByLabelText('Album *'), { target: { value: 'album' } })
   await waitFor(() => expect(screen.getByText('Start recording').disabled).toBe(false))
   fireEvent.click(screen.getByText('Start recording'))
@@ -104,4 +105,15 @@ it('releases devices before the asynchronous recorder flush and still uploads th
   })
   expect(api.uploadSession).toHaveBeenCalledTimes(1)
   expect(api.uploadSession.mock.calls[0][0].get('video').size).toBe(11)
+})
+
+it('preselects an album and script from the originating page without enabling the camera', async () => {
+  api.listIdeations.mockResolvedValue([{ id: 'script', prompt: 'Pitch script' }])
+  api.getIdeation.mockResolvedValue({ items: [{ text: 'Hello', gesture: 'Wave' }] })
+  render(<MemoryRouter initialEntries={['/record?album=album&script=script']}><Practice /></MemoryRouter>)
+  await screen.findByText('My album')
+  expect(screen.getByLabelText('Album *').value).toBe('album')
+  expect(screen.getByLabelText('Script (optional)').value).toBe('script')
+  expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+  expect(await screen.findByText('Hello')).toBeTruthy()
 })

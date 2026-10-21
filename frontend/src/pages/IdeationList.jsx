@@ -1,138 +1,77 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import IdeationItem from '../components/IdeationItem.jsx'
 
 export default function IdeationList() {
+  const [search, setSearch] = useSearchParams()
   const [items, setItems] = useState(null)
   const [error, setError] = useState(null)
-  const [openId, setOpenId] = useState(null)
-
+  const [prompt, setPrompt] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [reload, setReload] = useState(0)
+  const selected = items?.find((item) => item.id === search.get('script'))
   useEffect(() => {
-    api.listIdeations()
-      .then(setItems)
-      .catch((e) => setError(e.message))
-  }, [])
-
-  // Close the modal on Escape.
-  useEffect(() => {
-    if (!openId) return
-    function onKey(e) {
-      if (e.key === 'Escape') setOpenId(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [openId])
-
-  async function handleDelete(id) {
-    if (!confirm('Delete this ideation?')) return
+    let cancelled = false
+    setError(null)
+    api.listIdeations().then((result) => { if (!cancelled) setItems(result) })
+      .catch((e) => { if (!cancelled) setError(e.message) })
+    return () => { cancelled = true }
+  }, [reload])
+  async function generate(event) {
+    event.preventDefault()
+    if (prompt.trim().length < 3 || busy) return
+    setBusy(true)
+    setError(null)
     try {
-      await api.deleteIdeation(id)
-      setItems((prev) => prev.filter((i) => i.id !== id))
-      if (openId === id) setOpenId(null)
-    } catch (e) {
-      setError(e.message)
-    }
+      const result = await api.createIdeation(prompt.trim())
+      setItems((previous) => [result, ...(previous || [])])
+      setSearch({ script: result.id })
+      setPrompt('')
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
   }
-
-  const openItem = openId ? items.find((i) => i.id === openId) : null
-
-  if (error) return <p className="error">{error}</p>
-  if (items === null) return <p className="muted">Loading…</p>
-
+  async function remove() {
+    if (deleting || !window.confirm('Delete this script?')) return
+    setDeleting(true)
+    setError(null)
+    try {
+      await api.deleteIdeation(selected.id)
+      setItems((previous) => previous.filter((item) => item.id !== selected.id))
+      setSearch({})
+    } catch (e) { setError(e.message) }
+    finally { setDeleting(false) }
+  }
   return (
-    <div className="stack">
-      <h1 className="page-title">Your ideations</h1>
-      {items.length === 0 ? (
-        <div className="empty">
-          You haven't generated any ideas yet. Head to the <Link to="/dashboard">dashboard</Link> to start.
-        </div>
-      ) : (
-        <div className="ideation-list">
-          {items.map((it) => (
-            <motion.button
-              key={it.id}
-              type="button"
-              className="neu ideation-summary ideation-summary-clickable"
-              onClick={() => setOpenId(it.id)}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-              whileHover={{ y: -2 }}
-              aria-label={`Open ideation: ${it.prompt}`}
-            >
-              <span className="date">{new Date(it.created_at).toLocaleString()}</span>
-              <p className="prompt">{it.prompt}</p>
-              <span className="open-hint">Click to view →</span>
-            </motion.button>
-          ))}
-        </div>
-      )}
-
-      {/* Modal ---------------------------------------------------- */}
-      <AnimatePresence>
-        {openItem && (
-          <motion.div
-            className="modal-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            onClick={() => setOpenId(null)}
-            role="dialog"
-            aria-modal="true"
-          >
-            <motion.div
-              className="modal-panel neu"
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-head">
-                <div>
-                  <span className="modal-eyebrow">Ideation</span>
-                  <h2 className="modal-title">{openItem.prompt}</h2>
-                  <span className="modal-date">
-                    {new Date(openItem.created_at).toLocaleString()}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="modal-close"
-                  onClick={() => setOpenId(null)}
-                  aria-label="Close"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="modal-body">
-                <IdeationItem items={openItem.items} />
-              </div>
-
-              <div className="modal-foot">
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={() => handleDelete(openItem.id)}
-                >
-                  Delete ideation
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setOpenId(null)}
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="stack page-stack">
+      <div className="page-head"><div><h1>Scripts</h1><p>Plan what to say and how to deliver it.</p></div></div>
+      <div className="scripts-layout">
+        <aside className="scripts-sidebar">
+          <button className={`btn ${!selected ? 'btn-primary' : ''}`} onClick={() => setSearch({})}>New script</button>
+          <h2>Saved scripts</h2>
+          {items === null ? (error ? <button className="btn" onClick={() => setReload((value) => value + 1)}>Retry loading</button> : <p role="status">Loading</p>) : !items.length ? <p className="muted">Your scripts will appear here.</p> : (
+            <nav className="script-list" aria-label="Saved scripts">{items.map((item) => (
+              <Link key={item.id} to={`/scripts?script=${item.id}`} className={selected?.id === item.id ? 'selected' : ''} aria-current={selected?.id === item.id ? 'page' : undefined}>
+                <span>{item.prompt}</span><small>{new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</small>
+              </Link>
+            ))}</nav>
+          )}
+        </aside>
+        <section className="script-editor" aria-label={selected ? 'Script details' : 'Create script'}>
+          {error && <p role="alert" className="error">{error}</p>}
+          {selected ? <>
+            <div className="script-heading"><h2>{selected.prompt}</h2><Link className="btn btn-primary" to={`/record?script=${selected.id}`}>Use for recording</Link></div>
+            <IdeationItem items={selected.items} />
+            <button className="btn btn-ghost" onClick={remove} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete script'}</button>
+          </> : <form className="stack" onSubmit={generate}>
+            <label htmlFor="script-topic" className="field-label">What are you working on?</label>
+            <textarea id="script-topic" className="textarea" placeholder="e.g. A short pitch for a productivity app for college students" rows={5} maxLength={2000} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={busy} required minLength={3} />
+            <div className="form-foot"><p>A short script with a delivery cue for each line.</p><button className="btn btn-primary" disabled={busy || items === null || prompt.trim().length < 3}>{busy ? 'Writing script…' : 'Generate script'}</button></div>
+            {busy && <p role="status" className="muted">Preparing your script…</p>}
+          </form>}
+        </section>
+      </div>
     </div>
   )
 }

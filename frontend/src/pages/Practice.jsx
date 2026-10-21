@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { api } from '../api.js'
 
@@ -13,6 +13,7 @@ function formatTime(secs) {
 
 export default function Practice() {
   const navigate = useNavigate()
+  const [search] = useSearchParams()
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const recorderRef = useRef(null)
@@ -25,13 +26,14 @@ export default function Practice() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
   const [ideations, setIdeations] = useState([])
-  const [selectedId, setSelectedId] = useState('')
+  const [selectedId, setSelectedId] = useState(search.get('script') || '')
   const [selected, setSelected] = useState(null)
   const [cameraReady, setCameraReady] = useState(false)
-  const [cameraLoading, setCameraLoading] = useState(true)
+  const [cameraLoading, setCameraLoading] = useState(false)
   const [sessionName, setSessionName] = useState('')
   const [albums, setAlbums] = useState([])
-  const [selectedAlbumId, setSelectedAlbumId] = useState('')
+  const [selectedAlbumId, setSelectedAlbumId] = useState(search.get('album') || '')
+  const [albumsLoading, setAlbumsLoading] = useState(true)
 
   // Load ideations for the dropdown.
   useEffect(() => {
@@ -40,7 +42,10 @@ export default function Practice() {
 
   // Load albums for the required album picker.
   useEffect(() => {
-    api.albums.list().then(setAlbums).catch((e) => setError(e.message))
+    api.albums.list().then((items) => {
+      setAlbums(items)
+      setSelectedAlbumId((id) => items.some((album) => album.id === id) ? id : '')
+    }).catch((e) => setError(e.message)).finally(() => setAlbumsLoading(false))
   }, [])
 
   async function enableCamera() {
@@ -76,7 +81,6 @@ export default function Practice() {
 
   useEffect(() => {
     mountedRef.current = true
-    enableCamera()
     return () => {
       mountedRef.current = false
       ++cameraRequestRef.current
@@ -208,13 +212,14 @@ export default function Practice() {
 
   return (
     <div className="practice-layout">
-      <h1 className="page-title">Practice</h1>
+      <div className="page-head"><div><h1>Record a take</h1><p>Choose an album and an optional script. Takes can be up to 2 minutes.</p></div></div>
+      {!albumsLoading && albums.length === 0 && <p className="notice">Create an album before recording. <Link to="/albums" className="text-link">Go to albums</Link></p>}
 
       {/* Top: name + album + ideation dropdown, full width */}
       <div className="practice-top">
         <div className="field">
           <label className="field-label" htmlFor="session-name">
-            Name this session (optional)
+            Recording name (optional)
           </label>
           <input
             id="session-name"
@@ -241,9 +246,9 @@ export default function Practice() {
             required
           >
             <option value="">
-              {albums.length === 0
-                ? '— Create an album on the dashboard first —'
-                : '— Pick an album —'}
+              {albumsLoading ? 'Loading albums…' : albums.length === 0
+                ? 'Create an album first'
+                : 'Choose an album'}
             </option>
             {albums.map((a) => (
               <option key={a.id} value={a.id}>
@@ -256,7 +261,7 @@ export default function Practice() {
 
         <div className="field">
           <label className="field-label" htmlFor="ideation-select">
-            Reference an ideation (optional)
+            Script (optional)
           </label>
           <select
             id="ideation-select"
@@ -265,7 +270,7 @@ export default function Practice() {
             onChange={(e) => setSelectedId(e.target.value)}
             disabled={recording || uploading}
           >
-            <option value="">— None —</option>
+            <option value="">No script</option>
             {ideations.map((i) => (
               <option key={i.id} value={i.id}>
                 {i.prompt.length > 60 ? i.prompt.slice(0, 60) + '…' : i.prompt}
@@ -292,6 +297,28 @@ export default function Practice() {
               </>
             )}
           </div>
+          {/* Camera controls */}
+          <div className="practice-bottom">
+            {error && <p className="error">{error}</p>}
+            <div className="practice-actions">
+              {!cameraReady && !cameraLoading && !uploading && (
+                <button className="btn" onClick={enableCamera}>Enable camera</button>
+              )}
+              {!recording ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={startRecording}
+                  disabled={!cameraReady || uploading || !selectedAlbumId}
+                >
+                  {uploading ? 'Uploading…' : 'Start recording'}
+                </button>
+              ) : (
+                <button className="btn btn-danger" onClick={stopRecording}>
+                  Stop recording
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="practice-col practice-col-reference">
@@ -317,31 +344,8 @@ export default function Practice() {
             </motion.div>
           ) : (
             <div className="empty" style={{ padding: 'var(--gap-4)' }}>
-              Pick an ideation above to load its script + gestures here.
+              Choose a script to keep your lines and delivery cues beside the camera.
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom: record button + error */}
-      <div className="practice-bottom">
-        {error && <p className="error">{error}</p>}
-        <div className="practice-actions">
-          {!cameraReady && !cameraLoading && !uploading && (
-            <button className="btn" onClick={enableCamera}>Enable camera</button>
-          )}
-          {!recording ? (
-            <button
-              className="btn btn-primary"
-              onClick={startRecording}
-              disabled={!cameraReady || uploading || !selectedAlbumId}
-            >
-              {uploading ? 'Uploading…' : 'Start recording'}
-            </button>
-          ) : (
-            <button className="btn btn-danger" onClick={stopRecording}>
-              Stop recording
-            </button>
           )}
         </div>
       </div>

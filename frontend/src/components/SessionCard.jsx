@@ -14,7 +14,7 @@ export default function SessionCard({ session }) {
             <img src={session.thumbnail} alt="" loading="lazy" />
           ) : (
             <div className="session-thumb-placeholder">
-              <span>●</span>
+              <span>Recording</span>
             </div>
           )}
         </div>

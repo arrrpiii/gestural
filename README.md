@@ -21,6 +21,20 @@ The script↔gesture pair and the timestamped review are the two pieces of
 feedback that make the loop useful — everything else (auth, history,
 thumbnails) is plumbing around them.
 
+## Pages
+
+- **Home** (`/`): direct access to recording, albums, and scripts.
+- **Albums** (`/albums`): create albums; open an album to see its recordings,
+  progress review, and settings.
+- **Scripts** (`/scripts`): generate, browse, and delete scripts with delivery cues.
+- **Record** (`/record`): choose an album and optional script, enable the camera,
+  and record. Album/script links preselect the relevant context.
+- **Account** (`/account`): account details and logout.
+
+The UI uses a white/black palette, small page transitions, and responsive layouts.
+Reduced-motion preferences are respected. Existing `/dashboard`, `/ideation`,
+and `/practice` links redirect to the new pages. See [DESIGN.md](DESIGN.md).
+
 ## Tech stack
 
 - **Frontend** — React 18 + Vite + plain CSS + Framer Motion
@@ -54,28 +68,24 @@ gestural/
     ├── package.json
     └── src/
         ├── main.jsx                root, AuthProvider, BrowserRouter
-        ├── App.jsx                 routes + ProtectedRoute + page transitions
+        ├── App.jsx                 routes + auth guards + page transitions
         ├── api.js                  fetch wrapper, JWT, session endpoints
         ├── context/
         │   └── AuthContext.jsx     login / register / logout / hydrate
         ├── components/
         │   ├── Nav.jsx
-        │   ├── Footer.jsx
-        │   ├── FloatingPlus.jsx    fixed centre-bottom "+" with pulse
         │   ├── IdeationItem.jsx    text → arrow → gesture cards
         │   └── SessionCard.jsx     thumbnail + name + date
         ├── pages/
         │   ├── Home.jsx            public + signed-in variants
-        │   ├── About.jsx
-        │   ├── WhyUs.jsx
         │   ├── Login.jsx
         │   ├── Register.jsx
-        │   ├── Dashboard.jsx       ideation prompt + sessions grid
+        │   ├── Dashboard.jsx       album creation + album list
         │   ├── Practice.jsx        webcam + recorder + reference column
         │   ├── History.jsx         video + timestamped timeline + actions
-        │   └── IdeationList.jsx    card grid → modal detail
+        │   └── IdeationList.jsx    script generation + saved scripts
         └── styles/
-            ├── theme.css           CSS variables, neumorphism palette
+            ├── theme.css           monochrome design tokens
             ├── base.css            reset, layout, buttons, inputs
             └── pages.css           page-specific layouts
 ```
@@ -109,14 +119,14 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5173. Register, create an album on the dashboard,
-then open Practice. Camera capture requires localhost or HTTPS. Recordings
+Open http://localhost:5173. Register, create an album on the Albums page,
+then select Record a take. Camera capture requires localhost or HTTPS. Recordings
 are limited to 120 seconds and 50 MiB. ffmpeg is provided by imageio-ffmpeg;
 if unavailable on your platform, install ffmpeg or set `IMAGEIO_FFMPEG_EXE`.
 
 ## Performance reviewer
 
-Open an album on the dashboard and select **Review progress**. At least two
+Open an album on the Albums page and select **Review progress**. At least two
 recordings with usable coaching feedback are required. The reviewer considers
 the latest six recordings in the album, excludes failed or missing reviews,
 and compares the earliest included take with the latest included take. Intermediate
